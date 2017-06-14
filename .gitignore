@@ -1,6 +1,6 @@
 model_1/*
-*.csv
-
+*_sub.csv
+*-results.csv
 
 .DS_Store
 .idea/*
