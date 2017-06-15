@@ -5,6 +5,7 @@ from sklearn.random_projection import GaussianRandomProjection
 from sklearn.random_projection import SparseRandomProjection
 from sklearn.decomposition import PCA, FastICA
 from sklearn.decomposition import TruncatedSVD
+from sklearn.model_selection import KFold
 import xgboost as xgb
 import pandas as pd
 
@@ -78,60 +79,130 @@ for i in range(1, n_comp + 1):
     test['srp_' + str(i)] = srp_results_test[:, i - 1]
 
 
-y_train = train['y'].values
-train.drop(['ID', 'y'], axis=1)
-y_mean = np.mean(y_train)
+label_train = train['y']
+id_train = train['ID'].values
+train.drop(['ID', 'y'], axis=1, inplace=True)
+y_mean = np.mean(label_train)
 id_test = test['ID'].values
-test.drop(['ID'], axis=1)
+test.drop(['ID'], axis=1, inplace=True)
 
 '''
   Set xgb params
 '''
 xgb_params = {
     'eta': 0.005,
-    'max_depth': 4,
-    'subsample': 0.93,
+    'max_depth': 5,
+    'subsample': 0.98,
     'objective': 'reg:linear',
     'eval_metric': 'rmse',
     'base_score': y_mean, # base prediction = mean(target)
     'silent': 1
 }
 
-dtrain = xgb.DMatrix(train.drop('y', axis=1), y_train)
 dtest = xgb.DMatrix(test)
 
-cv_result = xgb.cv(xgb_params,
+kf = KFold(n_splits=10, shuffle=True, random_state=42)
+
+y_preds = []
+y_valid_preds = np.array([])
+best_nums = []
+y_valid_scores = []
+for foldID, (train_index, valid_index) in enumerate(kf.split(train)):
+    # Split data
+    x_train, x_valid = train.iloc[train_index], train.iloc[valid_index]
+    y_train, y_valid = label_train.iloc[train_index], label_train.iloc[valid_index]
+
+    dtrain = xgb.DMatrix(x_train, y_train)
+    dvalid = xgb.DMatrix(x_valid)
+
+    cv_result = xgb.cv(xgb_params,
                   dtrain,
-                  num_boost_round=1000, # increase to have better results (~700)
+                  num_boost_round=1500, # increase to have better results (~700)
                   early_stopping_rounds=50,
-                  verbose_eval=10,
+                  verbose_eval=20,
                   show_stdv=False
                  )
 
-num_boost_rounds = len(cv_result)
-print('num_boost_rounds=' + str(num_boost_rounds))
+    num_boost_rounds = len(cv_result)
+    best_nums.append(num_boost_rounds)
+    print('foldID: ', foldID, ' num_boost_rounds=' + str(num_boost_rounds))
 
-# num_boost_rounds = 1365
-# train model
-model = xgb.train(dict(xgb_params, silent=1), dtrain, num_boost_round=num_boost_rounds)
+    model = xgb.train(dict(xgb_params, silent=1), dtrain, num_boost_round=num_boost_rounds)
+
+    '''
+      Valid
+    '''
+    y_pred_valid = model.predict(dvalid)
+    y_valid_score = r2_score(y_valid, y_pred_valid)
+    print('foldID: ', foldID ,' r2 score = ', y_valid_score)
+    y_valid_scores.append(y_valid_score)
+
+    y_valid_preds = np.concatenate((y_valid_preds, y_pred_valid), axis=0)
+
+    '''
+      For test
+    '''
+    y_pred = model.predict(dtest)
+
+    y_preds.append(y_pred)
 
 
-'''
-  Predict train data
-'''
-y_pred_train = model.predict(dtrain)
-print(r2_score(y_train, y_pred_train))
+# dtrain = xgb.DMatrix(train.drop('y', axis=1), y_train)
+# dtest = xgb.DMatrix(test)
+
+# cv_result = xgb.cv(xgb_params,
+#                   dtrain,
+#                   num_boost_round=1000, # increase to have better results (~700)
+#                   early_stopping_rounds=50,
+#                   verbose_eval=10,
+#                   show_stdv=False
+#                  )
+
+# num_boost_rounds = len(cv_result)
+# print('num_boost_rounds=' + str(num_boost_rounds))
+
+# # num_boost_rounds = 1365
+# # train model
+# model = xgb.train(dict(xgb_params, silent=1), dtrain, num_boost_round=num_boost_rounds)
 
 
-'''
-  Make test predict
-'''
-y_pred = model.predict(dtest)
+# '''
+#   Predict train data
+# '''
+# y_pred_train = model.predict(dtrain)
+# print(r2_score(y_train, y_pred_train))
+
+
+# '''
+#   Make test predict
+# '''
+# y_pred = model.predict(dtest)
 
 '''
   Generate the sub file
 '''
+
+print('----Best num rounds----')
+print(best_nums)
+print('----Valid scores----')
+print(y_valid_scores)
+
+
+# sub = pd.DataFrame()
+# sub['ID'] = id_test
+# sub['y'] = y_pred
+# sub.to_csv('xgboost_model_sub.csv', index=False)
+
+'''
+  Merge the test prediction data by average
+'''
 sub = pd.DataFrame()
 sub['ID'] = id_test
-sub['y'] = y_pred
-sub.to_csv('xgboost_model_sub.csv', index=False)
+sub['y'] = np.average(y_preds, axis=0)
+
+sub.to_csv('xgboost_test_model.csv', index=False)
+
+'''
+'''
+mode_xgb = pd.DataFrame({'ID': id_train, 'y': y_valid_preds})
+mode_xgb.to_csv('xgboost_feature_model.csv', index=False)

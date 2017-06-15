@@ -82,6 +82,7 @@ for i in range(1, n_comp + 1):
 
 
 label_train = train['y']
+id_train = train['ID'].values
 train.drop(['ID', 'y'], axis=1, inplace=True)
 
 # y_mean = np.mean(y_train)
@@ -99,11 +100,12 @@ test.drop(['ID'], axis=1, inplace=True)
 
 # print('best_estimator_ = ', reg.best_estimator_)
 
-kf = KFold(n_splits=10, shuffle=True, random_state=420)
+kf = KFold(n_splits=10, shuffle=True, random_state=42)
 
-foldID = 0
-y_pred = []
-for train_index, valid_index in kf.split(train):
+y_preds = []
+y_valid_preds = np.array([])
+for foldID, (train_index, valid_index) in enumerate(kf.split(train)):
+  # Split data
   x_train, x_valid = train.iloc[train_index], train.iloc[valid_index]
   y_train, y_valid = label_train.iloc[train_index], label_train.iloc[valid_index]
 
@@ -125,18 +127,24 @@ for train_index, valid_index in kf.split(train):
   print('fold ', foldID , ' raw train r2 score = ', train_r2_score)
 
   '''
-    Predict test data
+    Predict test data and collect predict data
   '''
-  y_pred.append(reg.predict(test))
+  y_preds.append(reg.predict(test))
+  y_valid_preds = np.concatenate((y_valid_preds, y_pred_valid), axis=0)
 
-  # add 1
-  foldID = foldID + 1
 
 '''
   Merge the test prediction data by average
 '''
 sub = pd.DataFrame()
 sub['ID'] = id_test
-sub['y'] = np.average(y_pred, axis=0)
+sub['y'] = np.average(y_preds, axis=0)
 
-sub.to_csv('random_forest_model_sub.csv', index=False)
+sub.to_csv('random_forest_test_model.csv', index=False)
+
+'''
+'''
+mode_random_forest = pd.DataFrame({'ID': id_train,'y': y_valid_preds})
+mode_random_forest.to_csv('random_forest_feature_model.csv', index=False)
+
+print('y_preds length = ', len(y_preds))
