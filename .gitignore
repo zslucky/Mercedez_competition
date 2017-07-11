@@ -5,8 +5,7 @@ model_1/*
 .DS_Store
 .idea/*
 
+*_model.csv
+*_sub.csv
 
-random_forest_feature_model.csv
-random_forest_test_model.csv
-xgboost_feature_model.csv
-xgboost_test_model.csv
+.ipynb_checkpoints/*
