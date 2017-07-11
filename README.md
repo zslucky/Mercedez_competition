@@ -8,6 +8,10 @@ My 2nd competition on kaggle
 
 ## Files
 
+### Jupyter note book
+
+* `Object columns Analysis Book.ipynb`: data analysis for object columns `X0, X1, X2, X3, X4, X5, X6, X8`.
+
 ### Main model files
 
 * `adaboost_regressor_model.py`: stacked feature model by using adaboost regressor.
