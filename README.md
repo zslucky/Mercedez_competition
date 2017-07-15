@@ -2,7 +2,7 @@
 
 My 2nd competition on kaggle
 
-201st of 3927,  bronze medal
+196st of 3835,  bronze medal
 
 ---
 
